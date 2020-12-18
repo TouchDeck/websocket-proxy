@@ -25,6 +25,7 @@ func newProxy(agentAddress string, remoteAddress string) *proxy {
 	}
 
 	p.agentServer.onClientConnected = func(c *client) {
+		// TODO: Use json, get more agent information (platform, hostname)
 		// Listen for one message with the agent id.
 		agentId, err := readOneMessage(c)
 		if err != nil {
