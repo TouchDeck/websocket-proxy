@@ -1,4 +1,4 @@
-# tcp-proxy
+# TCP Proxy
 
 A TCP proxy server for piping data between two clients.
 
