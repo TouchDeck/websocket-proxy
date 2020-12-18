@@ -1,5 +1,7 @@
 package main
 
+import "log"
+
 type proxy struct {
 	agentServer  *server
 	remoteServer *server
@@ -15,11 +17,24 @@ func newProxy(agentAddress string, remoteAddress string) *proxy {
 
 	remoteServer := newServer(remoteAddress)
 	remoteServer.onClientConnected = func(c *client) {
-		// Listen for one message with local ip, pipe to agent.
+		// Listen for one message with local address of agent to connect to.
+		targetAgentAddr := readOneMessage(c)
+		targetAgent := agentServer.getClient(c.remoteIp, targetAgentAddr)
+
+		if targetAgent == nil {
+			log.Println("Could not find target agent")
+			c.close()
+			return
+		}
 	}
 
 	return &proxy{
 		agentServer:  agentServer,
 		remoteServer: remoteServer,
 	}
+}
+
+func readOneMessage(c *client) string {
+	// TODO
+	return ""
 }
