@@ -11,7 +11,6 @@ func main() {
 }
 
 func getRemoteIp(address string) string {
-	log.Println(address)
 	var ip string
 
 	if address[0] == '[' {

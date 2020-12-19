@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/gorilla/websocket"
 	"io"
 	"log"
 )
@@ -33,7 +34,6 @@ func newProxy(wsPath string) *proxy {
 			return
 		}
 		log.Println("Agent client connected")
-		log.Println(c.remoteIp + "/" + agentId)
 
 		// Close the previous client, store the new one.
 		if oldClient := p.agents[c.remoteIp+"/"+agentId]; oldClient != nil {
@@ -51,7 +51,6 @@ func newProxy(wsPath string) *proxy {
 			return
 		}
 		log.Println("Remote client connected")
-		log.Println(c.remoteIp + "/" + agentId)
 
 		// Find the target agent.
 		targetAgent := p.agents[c.remoteIp+"/"+agentId]
@@ -62,8 +61,20 @@ func newProxy(wsPath string) *proxy {
 		}
 
 		// TODO: this is not how this works apparently :')
-		go io.Copy(c.conn.UnderlyingConn(), targetAgent.conn)
-		go io.Copy(targetAgent.conn, c.conn.UnderlyingConn())
+		remoteWriter, err := c.conn.NextWriter(websocket.TextMessage)
+		if err != nil {
+			log.Println("Could not open remote writer:", err)
+			c.close()
+			return
+		}
+		_, remoteReader, err := c.conn.NextReader()
+		if err != nil {
+			log.Println("Could not open remote reader:", err)
+			c.close()
+			return
+		}
+		go io.Copy(remoteWriter, targetAgent.conn)
+		go io.Copy(targetAgent.conn, remoteReader)
 	}
 
 	return p
