@@ -1,29 +1,36 @@
 package main
 
 import (
+	"bufio"
 	"log"
 	"net"
-	"strings"
 )
 
 type client struct {
 	conn     net.Conn
-	serv     *server
 	remoteIp string
 }
 
 type server struct {
-	address              string
-	onClientConnected    func(c *client)
-	onClientDisconnected func(c *client)
+	onClientConnected func(c *client)
 }
 
 func (c *client) close() {
 	c.conn.Close()
 }
 
-func (s *server) listen() {
-	listener, err := net.Listen("tcp", s.address)
+func (c *client) readMessage() (string, error) {
+	reader := bufio.NewReader(c.conn)
+	msg, err := reader.ReadString('\n')
+	if err == nil {
+		msg = msg[:len(msg)-1]
+	}
+	return msg, err
+}
+
+func (s *server) listen(address string) {
+	log.Println("Starting TCP server on:", address)
+	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatal("Error starting TCP server:", err)
 	}
@@ -39,22 +46,14 @@ func (s *server) listen() {
 
 		newClient := &client{
 			conn:     conn,
-			serv:     s,
-			remoteIp: getRemoteIp(conn),
+			remoteIp: getRemoteIp(conn.RemoteAddr().String()),
 		}
-
 		s.onClientConnected(newClient)
 	}
 }
 
-func newServer(address string) *server {
-	log.Println("Starting server on:", address)
+func newServer() *server {
 	return &server{
-		address:           address,
 		onClientConnected: func(c *client) {},
 	}
-}
-
-func getRemoteIp(conn net.Conn) string {
-	return strings.Split(conn.RemoteAddr().String(), ":")[0]
 }
