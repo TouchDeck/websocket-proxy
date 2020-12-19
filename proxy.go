@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/gorilla/websocket"
-	"io"
 	"log"
 )
 
@@ -60,21 +59,36 @@ func newProxy(wsPath string) *proxy {
 			return
 		}
 
-		// TODO: this is not how this works apparently :')
-		remoteWriter, err := c.conn.NextWriter(websocket.TextMessage)
-		if err != nil {
-			log.Println("Could not open remote writer:", err)
-			c.close()
-			return
-		}
-		_, remoteReader, err := c.conn.NextReader()
-		if err != nil {
-			log.Println("Could not open remote reader:", err)
-			c.close()
-			return
-		}
-		go io.Copy(remoteWriter, targetAgent.conn)
-		go io.Copy(targetAgent.conn, remoteReader)
+		// Pipe all data both ways.
+		// TODO Stop piping if either client disconnects.
+		go func() {
+			for {
+				_, msg, err := c.conn.ReadMessage()
+				if err != nil {
+					log.Println("Error while reading websocket message:", err)
+					return
+				}
+				_, err = targetAgent.conn.Write(msg)
+				if err != nil {
+					log.Println("Error while writing TCP message:", err)
+					return
+				}
+			}
+		}()
+		go func() {
+			for {
+				msg, err := targetAgent.readMessage()
+				if err != nil {
+					log.Println("Error while reading TCP message:", err)
+					return
+				}
+				err = c.conn.WriteMessage(websocket.TextMessage, []byte(msg))
+				if err != nil {
+					log.Println("Error while writing websocket message:", err)
+					return
+				}
+			}
+		}()
 	}
 
 	return p
