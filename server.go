@@ -6,20 +6,20 @@ import (
 	"net"
 )
 
-type client struct {
+type tcpClient struct {
 	conn     net.Conn
 	remoteIp string
 }
 
-type server struct {
-	onClientConnected func(c *client)
+type tcpServer struct {
+	onClientConnected func(c *tcpClient)
 }
 
-func (c *client) close() {
+func (c *tcpClient) close() {
 	c.conn.Close()
 }
 
-func (c *client) readMessage() (string, error) {
+func (c *tcpClient) readMessage() (string, error) {
 	reader := bufio.NewReader(c.conn)
 	msg, err := reader.ReadString('\n')
 	if err == nil {
@@ -28,7 +28,7 @@ func (c *client) readMessage() (string, error) {
 	return msg, err
 }
 
-func (s *server) listen(address string) {
+func (s *tcpServer) listen(address string) {
 	log.Println("Starting TCP server on:", address)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -44,7 +44,7 @@ func (s *server) listen(address string) {
 			continue
 		}
 
-		newClient := &client{
+		newClient := &tcpClient{
 			conn:     conn,
 			remoteIp: getRemoteIp(conn.RemoteAddr().String()),
 		}
@@ -52,8 +52,8 @@ func (s *server) listen(address string) {
 	}
 }
 
-func newServer() *server {
-	return &server{
-		onClientConnected: func(c *client) {},
+func newTcpServer() *tcpServer {
+	return &tcpServer{
+		onClientConnected: func(c *tcpClient) {},
 	}
 }

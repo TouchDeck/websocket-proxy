@@ -6,9 +6,9 @@ import (
 )
 
 type proxy struct {
-	agentServer  *server
+	agentServer  *tcpServer
 	remoteServer *websocketServer
-	agents       map[string]*client
+	agents       map[string]*tcpClient
 }
 
 func (p proxy) listen(agentServerAddr string, remoteServerAddr string) {
@@ -18,12 +18,12 @@ func (p proxy) listen(agentServerAddr string, remoteServerAddr string) {
 
 func newProxy(wsPath string) *proxy {
 	p := &proxy{
-		agentServer:  newServer(),
+		agentServer:  newTcpServer(),
 		remoteServer: newWebsocketServer(wsPath),
-		agents:       map[string]*client{},
+		agents:       map[string]*tcpClient{},
 	}
 
-	p.agentServer.onClientConnected = func(c *client) {
+	p.agentServer.onClientConnected = func(c *tcpClient) {
 		// TODO: Use json, get more agent information (platform, hostname)
 		// Listen for one message with the agent id.
 		agentId, err := c.readMessage()

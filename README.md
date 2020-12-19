@@ -1,14 +1,14 @@
-# TCP Proxy
+# Websocket - TCP Proxy
 
-A TCP proxy server for piping data between two clients.
+A two-way websocket - TCP proxy server for piping data between two clients.
 
-The proxy differentiates between two kinds of clients: agents and remotes. Agents are passive clients that listen for messages, and optionally reply to them. Remotes are active clients that want to connect to an agent.
+The proxy differentiates between two kinds of clients: agents and remotes. Agents are TCP clients that listen for messages, and optionally reply to them. Remotes are websocket clients that want to connect to an agent.
 
 ## Protocol
 
-Agent clients should connect to port `6061`, and remote clients should connect to port `6062`.
+Agent (TCP) clients should connect to port `6061`, and remote (websocket) clients should connect to port `6062`, on path `/ws`.
 
-When connecting to the proxy, the first message (data followed by a newline `'\n'`) contains metadata about the agent or remote. For the agent this is a JSON object with the following properties:
+When connecting to the proxy, the first message contains metadata about the agent or remote. For the agent this is a JSON object with the following properties:
 
 | Property   | Description |
 |------------|-------------|
