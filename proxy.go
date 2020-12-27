@@ -56,16 +56,24 @@ func newProxy(basePath string) *proxy {
 		// Find the target agent.
 		targetAgent := p.agents[agentId]
 		if targetAgent == nil {
-			log.Println("Could not find target agent")
+			log.Println("Could not find target agent:", agentId)
 			remote.close()
 			return
 		}
 
 		// Pipe all data both ways.
-		// TODO Stop piping if either client disconnects.
-
-		go io.Copy(remote.conn.UnderlyingConn(), targetAgent.conn.UnderlyingConn())
-		go io.Copy(targetAgent.conn.UnderlyingConn(), remote.conn.UnderlyingConn())
+		go func() {
+			_, err := io.Copy(remote.conn.UnderlyingConn(), targetAgent.conn.UnderlyingConn())
+			if err != nil {
+				log.Println("Error piping remote -> agent:", err)
+			}
+		}()
+		go func() {
+			_, err := io.Copy(targetAgent.conn.UnderlyingConn(), remote.conn.UnderlyingConn())
+			if err != nil {
+				log.Println("Error piping agent -> remote:", err)
+			}
+		}()
 	}
 
 	return p
