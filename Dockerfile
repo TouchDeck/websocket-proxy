@@ -1,8 +1,8 @@
 FROM golang:alpine
 
-CMD ["tcp-proxy"]
-WORKDIR /go/src/tcp-proxy
-EXPOSE 6061 6062
+CMD ["websocket-proxy"]
+WORKDIR /go/src/websocket-proxy
+EXPOSE 8783
 
 COPY *.go ./
 RUN go install

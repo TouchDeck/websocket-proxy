@@ -2,29 +2,17 @@ package main
 
 import (
 	"log"
-	"strings"
+	"net/http"
 )
 
 func main() {
 	log.Println("Starting proxy...")
-	newProxy("/ws").listen(":6061", ":6062")
-}
+	newProxy("/ws")
 
-func getRemoteIp(address string) string {
-	var ip string
-
-	if address[0] == '[' {
-		// IPv6: [<ip>]:<port>
-		ip = address[1:strings.IndexRune(address, ']')]
-	} else {
-		// IPv4: <ip>:<port>
-		ip = strings.Split(address, ":")[0]
+	// Start the HTTP server.
+	log.Println("Starting HTTP server on port 8783")
+	err := http.ListenAndServe(":8783", nil)
+	if err != nil {
+		log.Fatalln("Error starting websocket server:", err)
 	}
-
-	// Make sure the IP address is always the same when coming from localhost.
-	if ip == "127.0.0.1" || ip == "::ffff:127.0.0.1" {
-		ip = "::1"
-	}
-
-	return ip
 }

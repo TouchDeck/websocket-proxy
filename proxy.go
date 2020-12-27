@@ -1,94 +1,64 @@
 package main
 
 import (
-	"github.com/gorilla/websocket"
+	"io"
 	"log"
 )
 
 type proxy struct {
-	agentServer  *tcpServer
+	agentServer  *websocketServer
 	remoteServer *websocketServer
-	agents       map[string]*tcpClient
+	agents       map[string]*websocketClient
 }
 
-func (p proxy) listen(agentServerAddr string, remoteServerAddr string) {
-	go p.agentServer.listen(agentServerAddr)
-	p.remoteServer.listen(remoteServerAddr)
-}
-
-func newProxy(wsPath string) *proxy {
+func newProxy(basePath string) *proxy {
 	p := &proxy{
-		agentServer:  newTcpServer(),
-		remoteServer: newWebsocketServer(wsPath),
-		agents:       map[string]*tcpClient{},
+		agentServer:  newWebsocketServer(basePath + "/agent"),
+		remoteServer: newWebsocketServer(basePath + "/remote"),
+		agents:       map[string]*websocketClient{},
 	}
 
-	p.agentServer.onClientConnected = func(c *tcpClient) {
+	p.agentServer.onClientConnected = func(agent *websocketClient) {
 		// TODO: Use json, get more agent information (platform, hostname)
 		// Listen for one message with the agent id.
-		agentId, err := c.readMessage()
+		agentId, err := agent.readMessage()
 		if err != nil {
-			log.Println("Could not read TCP message:", err)
-			c.close()
+			log.Println("Could not read agent message:", err)
+			agent.close()
 			return
 		}
 		log.Println("Agent client connected")
 
 		// Close the previous client, store the new one.
-		if oldClient := p.agents[c.remoteIp+"/"+agentId]; oldClient != nil {
+		if oldClient := p.agents[agent.remoteIp+"/"+agentId]; oldClient != nil {
 			oldClient.close()
 		}
-		p.agents[c.remoteIp+"/"+agentId] = c
+		p.agents[agent.remoteIp+"/"+agentId] = agent
 	}
 
-	p.remoteServer.onClientConnected = func(c *websocketClient) {
+	p.remoteServer.onClientConnected = func(remote *websocketClient) {
 		// Listen for one message with the id of the agent to connect to.
-		agentId, err := c.readMessage()
+		agentId, err := remote.readMessage()
 		if err != nil {
-			log.Println("Could not read websocket message:", err)
-			c.close()
+			log.Println("Could not read remote message:", err)
+			remote.close()
 			return
 		}
 		log.Println("Remote client connected")
 
 		// Find the target agent.
-		targetAgent := p.agents[c.remoteIp+"/"+agentId]
+		targetAgent := p.agents[remote.remoteIp+"/"+agentId]
 		if targetAgent == nil {
 			log.Println("Could not find target agent")
-			c.close()
+			remote.close()
 			return
 		}
 
 		// Pipe all data both ways.
 		// TODO Stop piping if either client disconnects.
-		go func() {
-			for {
-				_, msg, err := c.conn.ReadMessage()
-				if err != nil {
-					log.Println("Error while reading websocket message:", err)
-					return
-				}
-				_, err = targetAgent.conn.Write(msg)
-				if err != nil {
-					log.Println("Error while writing TCP message:", err)
-					return
-				}
-			}
-		}()
-		go func() {
-			for {
-				msg, err := targetAgent.readMessage()
-				if err != nil {
-					log.Println("Error while reading TCP message:", err)
-					return
-				}
-				err = c.conn.WriteMessage(websocket.TextMessage, []byte(msg))
-				if err != nil {
-					log.Println("Error while writing websocket message:", err)
-					return
-				}
-			}
-		}()
+
+		go io.Copy(remote.conn.UnderlyingConn(), targetAgent.conn.UnderlyingConn())
+		go io.Copy(targetAgent.conn.UnderlyingConn(), remote.conn.UnderlyingConn())
 	}
 
 	return p
