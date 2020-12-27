@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/gorilla/websocket"
+	"github.com/satori/go.uuid"
 	"io"
 	"log"
 )
@@ -20,8 +22,8 @@ func newProxy(basePath string) *proxy {
 
 	p.agentServer.onClientConnected = func(agent *websocketClient) {
 		// TODO: Use json, get more agent information (platform, hostname)
-		// Listen for one message with the agent id.
-		agentId, err := agent.readMessage()
+		// Listen for one message with the agent information.
+		_, err := agent.readMessage()
 		if err != nil {
 			log.Println("Could not read agent message:", err)
 			agent.close()
@@ -29,11 +31,16 @@ func newProxy(basePath string) *proxy {
 		}
 		log.Println("Agent client connected")
 
+		// TODO: Use V5 to make sure the same client info results in the same id.
+		agentId := uuid.Must(uuid.NewV4()).String()
+
 		// Close the previous client, store the new one.
-		if oldClient := p.agents[agent.remoteIp+"/"+agentId]; oldClient != nil {
+		if oldClient := p.agents[agentId]; oldClient != nil {
 			oldClient.close()
 		}
-		p.agents[agent.remoteIp+"/"+agentId] = agent
+		p.agents[agentId] = agent
+
+		agent.conn.WriteMessage(websocket.TextMessage, []byte(agentId))
 	}
 
 	p.remoteServer.onClientConnected = func(remote *websocketClient) {
@@ -47,7 +54,7 @@ func newProxy(basePath string) *proxy {
 		log.Println("Remote client connected")
 
 		// Find the target agent.
-		targetAgent := p.agents[remote.remoteIp+"/"+agentId]
+		targetAgent := p.agents[agentId]
 		if targetAgent == nil {
 			log.Println("Could not find target agent")
 			remote.close()
