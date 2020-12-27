@@ -8,25 +8,36 @@ import (
 )
 
 type proxy struct {
-	agentServer  *websocketServer
-	remoteServer *websocketServer
-	agents       map[string]*websocketClient
+	agentServer      *websocketServer
+	remoteServer     *websocketServer
+	agents           map[string]*agent
+	agentsByPublicIp map[string][]*agent
+}
+
+type agent struct {
+	Id           string `json:"id"`
+	Version      string `json:"version"`
+	LocalAddress string `json:"localAddress"`
+	Platform     string `json:"platform"`
+	Hostname     string `json:"hostname"`
+	client       *websocketClient
 }
 
 func newProxy(basePath string) *proxy {
 	p := &proxy{
-		agentServer:  newWebsocketServer(basePath + "/agent"),
-		remoteServer: newWebsocketServer(basePath + "/remote"),
-		agents:       map[string]*websocketClient{},
+		agentServer:      newWebsocketServer(basePath + "/agent"),
+		remoteServer:     newWebsocketServer(basePath + "/remote"),
+		agents:           map[string]*agent{},
+		agentsByPublicIp: map[string][]*agent{},
 	}
 
-	p.agentServer.onClientConnected = func(agent *websocketClient) {
+	p.agentServer.onClientConnected = func(newClient *websocketClient) {
 		// TODO: Use json, get more agent information (platform, hostname)
 		// Listen for one message with the agent information.
-		_, err := agent.readMessage()
+		_, err := newClient.readMessage()
 		if err != nil {
 			log.Println("Could not read agent message:", err)
-			agent.close()
+			newClient.close()
 			return
 		}
 		log.Println("Agent client connected")
@@ -36,11 +47,24 @@ func newProxy(basePath string) *proxy {
 
 		// Close the previous client, store the new one.
 		if oldClient := p.agents[agentId]; oldClient != nil {
-			oldClient.close()
+			oldClient.client.close()
 		}
-		p.agents[agentId] = agent
 
-		agent.conn.WriteMessage(websocket.TextMessage, []byte(agentId))
+		// TODO
+		newAgent := &agent{
+			Id:           agentId,
+			Version:      "1.0.0",
+			LocalAddress: "192.168.0.10",
+			Platform:     "windows",
+			Hostname:     "host",
+			client:       newClient,
+		}
+
+		// Store the agent by id and public ip.
+		p.agents[agentId] = newAgent
+		p.agentsByPublicIp[newClient.remoteIp] = append(p.agentsByPublicIp[newClient.remoteIp], newAgent)
+
+		newClient.conn.WriteMessage(websocket.TextMessage, []byte(agentId))
 	}
 
 	p.remoteServer.onClientConnected = func(remote *websocketClient) {
@@ -63,13 +87,13 @@ func newProxy(basePath string) *proxy {
 
 		// Pipe all data both ways.
 		go func() {
-			_, err := io.Copy(remote.conn.UnderlyingConn(), targetAgent.conn.UnderlyingConn())
+			_, err := io.Copy(remote.conn.UnderlyingConn(), targetAgent.client.conn.UnderlyingConn())
 			if err != nil {
 				log.Println("Error piping remote -> agent:", err)
 			}
 		}()
 		go func() {
-			_, err := io.Copy(targetAgent.conn.UnderlyingConn(), remote.conn.UnderlyingConn())
+			_, err := io.Copy(targetAgent.client.conn.UnderlyingConn(), remote.conn.UnderlyingConn())
 			if err != nil {
 				log.Println("Error piping agent -> remote:", err)
 			}

@@ -5,9 +5,13 @@ import (
 	"net/http"
 )
 
+var prx *proxy
+
 func main() {
 	log.Println("Starting proxy...")
-	newProxy("/ws")
+	prx = newProxy("/ws")
+
+	http.HandleFunc("/agents", discovery)
 
 	// Start the HTTP server.
 	log.Println("Starting HTTP server on port 8783")
