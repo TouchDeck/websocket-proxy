@@ -21,6 +21,10 @@ type agent struct {
 	client *websocketClient
 }
 
+type agentId struct {
+	Id string `json:"id"`
+}
+
 func newProxy(basePath string) *proxy {
 	p := &proxy{
 		agentServer:      newWebsocketServer(basePath + "/agent"),
@@ -56,6 +60,8 @@ func newProxy(basePath string) *proxy {
 		p.agents[newAgent.Id] = newAgent
 		p.agentsByPublicIp[newClient.remoteIp] = append(p.agentsByPublicIp[newClient.remoteIp], newAgent)
 
+		// TODO: check for and remove on error.
+
 		newClient.conn.WriteMessage(websocket.TextMessage, []byte(newAgent.Id))
 	}
 
@@ -67,17 +73,24 @@ func newProxy(basePath string) *proxy {
 			remote.close()
 			return
 		}
-		agentId := string(msg)
 
-		// Find the target agent.
-		targetAgent := p.agents[agentId]
-		if targetAgent == nil {
-			log.Println("Could not find target agent:", agentId)
+		target := &agentId{}
+		err = json.Unmarshal(msg, target)
+		if err != nil {
+			log.Println("Could not unmarshal remote message:", err)
 			remote.close()
 			return
 		}
 
-		log.Println("Remote client connected:", agentId)
+		// Find the target agent.
+		targetAgent := p.agents[target.Id]
+		if targetAgent == nil {
+			log.Println("Could not find target agent:", target.Id)
+			remote.close()
+			return
+		}
+
+		log.Println("Remote client connected:", target.Id)
 
 		// TODO: remove agent from lists on disconnect.
 
