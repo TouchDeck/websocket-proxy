@@ -28,11 +28,6 @@ func (c *websocketClient) close() {
 	c.conn.Close()
 }
 
-func (c *websocketClient) readMessage() (string, error) {
-	_, msg, err := c.conn.ReadMessage()
-	return string(msg), err
-}
-
 func (s *websocketServer) handleClient(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {

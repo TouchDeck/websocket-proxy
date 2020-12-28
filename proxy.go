@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
 	"io"
@@ -15,12 +16,9 @@ type proxy struct {
 }
 
 type agent struct {
-	Id           string `json:"id"`
-	Version      string `json:"version"`
-	LocalAddress string `json:"localAddress"`
-	Platform     string `json:"platform"`
-	Hostname     string `json:"hostname"`
-	client       *websocketClient
+	Id     string                 `json:"id"`
+	Meta   map[string]interface{} `json:"meta"`
+	client *websocketClient
 }
 
 func newProxy(basePath string) *proxy {
@@ -32,50 +30,44 @@ func newProxy(basePath string) *proxy {
 	}
 
 	p.agentServer.onClientConnected = func(newClient *websocketClient) {
-		// TODO: Use json, get more agent information (platform, hostname)
 		// Listen for one message with the agent information.
-		_, err := newClient.readMessage()
+		_, msg, err := newClient.conn.ReadMessage()
 		if err != nil {
 			log.Println("Could not read agent message:", err)
 			newClient.close()
 			return
 		}
-		log.Println("Agent client connected")
 
-		// TODO: Use V5 to make sure the same client info results in the same id.
-		agentId := uuid.Must(uuid.NewV4()).String()
-
-		// Close the previous client, store the new one.
-		if oldClient := p.agents[agentId]; oldClient != nil {
-			oldClient.client.close()
-		}
-
-		// TODO
 		newAgent := &agent{
-			Id:           agentId,
-			Version:      "1.0.0",
-			LocalAddress: "192.168.0.10",
-			Platform:     "windows",
-			Hostname:     "host",
-			client:       newClient,
+			client: newClient,
+			Meta:   map[string]interface{}{},
 		}
+		err = json.Unmarshal(msg, newAgent)
+		if err != nil {
+			log.Println("Could not unmarshal agent message:", err)
+			newClient.close()
+			return
+		}
+
+		newAgent.Id = uuid.Must(uuid.NewV4()).String()
+		log.Println("Agent client connected:", newAgent.Id)
 
 		// Store the agent by id and public ip.
-		p.agents[agentId] = newAgent
+		p.agents[newAgent.Id] = newAgent
 		p.agentsByPublicIp[newClient.remoteIp] = append(p.agentsByPublicIp[newClient.remoteIp], newAgent)
 
-		newClient.conn.WriteMessage(websocket.TextMessage, []byte(agentId))
+		newClient.conn.WriteMessage(websocket.TextMessage, []byte(newAgent.Id))
 	}
 
 	p.remoteServer.onClientConnected = func(remote *websocketClient) {
 		// Listen for one message with the id of the agent to connect to.
-		agentId, err := remote.readMessage()
+		_, msg, err := remote.conn.ReadMessage()
 		if err != nil {
 			log.Println("Could not read remote message:", err)
 			remote.close()
 			return
 		}
-		log.Println("Remote client connected")
+		agentId := string(msg)
 
 		// Find the target agent.
 		targetAgent := p.agents[agentId]
@@ -84,6 +76,10 @@ func newProxy(basePath string) *proxy {
 			remote.close()
 			return
 		}
+
+		log.Println("Remote client connected:", agentId)
+
+		// TODO: remove agent from lists on disconnect.
 
 		// Pipe all data both ways.
 		go func() {
