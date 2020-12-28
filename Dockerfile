@@ -1,9 +1,12 @@
-FROM golang:alpine
-
-CMD ["websocket-proxy"]
+FROM golang:latest AS build
 WORKDIR /go/src/websocket-proxy
-EXPOSE 8783
-
 COPY *.go ./
+
+ENV CGO_ENABLED=0
+RUN go get -d
 RUN go install
-RUN rm *
+
+FROM scratch
+COPY --from=build /go/bin/websocket-proxy /bin/websocket-proxy
+EXPOSE 8783
+CMD ["websocket-proxy"]
