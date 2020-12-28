@@ -1,5 +1,9 @@
 # Websocket Proxy
 
+[![Docker Image Version](https://img.shields.io/docker/v/lucascorpion/websocket-proxy?sort=semver)](https://hub.docker.com/r/lucascorpion/websocket-proxy)
+[![Docker Image Size](https://img.shields.io/docker/image-size/lucascorpion/websocket-proxy?sort=semver)](https://hub.docker.com/r/lucascorpion/websocket-proxy)
+[![Docker Pulls](https://img.shields.io/docker/pulls/lucascorpion/websocket-proxy)](https://hub.docker.com/r/lucascorpion/websocket-proxy)
+
 A two-way websocket proxy server for piping data between two clients.
 
 The proxy differentiates between two kinds of clients: agents and remotes. Agents are clients that listen for messages, and optionally reply to them. Remotes are clients that want to connect to an agent.
@@ -35,22 +39,4 @@ For the remote this is a JSON object with the following properties:
 
 ### Diagram
 
-```mermaid
-sequenceDiagram
-    participant Agent
-    participant Proxy
-    participant Remote
-    
-    %% Register the agent.
-    Agent->>Proxy: Agent info
-    Proxy-->>Agent: Agent id
-    
-    %% Connect to an agent.
-    Remote->>Proxy: Agent id
-    
-    %% Connected, piping data.
-    loop Connected
-        Remote->>Agent: Message
-        Agent-->>Remote: Response
-    end
-```
+![Sequence diagram](docs/sequence.jpg)
