@@ -20,22 +20,40 @@ The websocket endpoints for the agent and remote clients, respectively.
 
 ## Websocket Protocol
 
-When connecting to the proxy, the first message contains metadata about the agent or remote. For the agent this is a JSON object with the following properties:
+### Agent
 
-| Property   | Description |
-|------------|-------------|
-| `version`  | The version of the agent.
-| `address`  | The local address (IP and port) at which the agent is running.
-| `platform` | The platform the agent is running on, e.g. `windows`, `linux` or `mac`.
-| `hostname` | The name of the host the agent is running on.
+After connecting, the agent should send a message with a JSON object. This object can contain a `meta` field with freeform metadata about the agent. For example:
 
-The proxy will then assign a unique id to this agent, which remotes can use to identify it. It will also send a message containing this id to the agent.
+```json
+{
+  "meta": {
+    "version": "1.0.0",
+    "platform": "linux"
+  }
+}
+```
 
-For the remote this is a JSON object with the following properties:
+The proxy will then assign a unique id to this agent, which remotes can use to identify it. It will send the full agent object back to the agent:
 
-| Property | Description |
-|----------|-------------|
-| `id`     | The id of the client to connect to.
+```json
+{
+  "id": "4cab7bec-dfc2-48a9-a8c9-406118b4242f",
+  "meta": {
+    "version": "1.0.0",
+    "platform": "linux"
+  }
+}
+```
+
+### Remote
+
+After connecting, the agent should send a message with a JSON object. This object should contain an `id` field with the id of the agent to connect to. For example:
+
+```json
+{
+  "id": "4cab7bec-dfc2-48a9-a8c9-406118b4242f"
+}
+```
 
 ### Diagram
 

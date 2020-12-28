@@ -7,11 +7,11 @@ sequenceDiagram
     participant Remote
 
     %% Register the agent.
-    Agent->>Proxy: Agent info
-    Proxy-->>Agent: Agent id
+    Agent->>Proxy: { "meta": { ... } }
+    Proxy-->>Agent: { "id": "<id>", "meta": { ... } }
 
     %% Connect to an agent.
-    Remote->>Proxy: Agent id
+    Remote->>Proxy: { "id": "<id>" }
 
     Note over Agent,Remote: Connection established, proxy is now fully transparent.
 

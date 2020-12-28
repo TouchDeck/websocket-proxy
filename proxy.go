@@ -60,9 +60,15 @@ func newProxy(basePath string) *proxy {
 		p.agents[newAgent.Id] = newAgent
 		p.agentsByPublicIp[newClient.remoteIp] = append(p.agentsByPublicIp[newClient.remoteIp], newAgent)
 
-		// TODO: check for and remove on error.
+		reply, err := json.Marshal(newAgent)
+		if err != nil {
+			log.Println("Could not marshal agent response:", err)
+			newClient.close()
+			return
+		}
 
-		newClient.conn.WriteMessage(websocket.TextMessage, []byte(newAgent.Id))
+		// TODO: check for and remove on error.
+		newClient.conn.WriteMessage(websocket.TextMessage, reply)
 	}
 
 	p.remoteServer.onClientConnected = func(remote *websocketClient) {
