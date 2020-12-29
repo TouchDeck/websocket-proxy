@@ -4,7 +4,6 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-	"strings"
 )
 
 type websocketClient struct {
@@ -37,7 +36,7 @@ func (s *websocketServer) handleClient(w http.ResponseWriter, r *http.Request) {
 
 	newClient := &websocketClient{
 		conn:     conn,
-		remoteIp: getRemoteIp(r.RemoteAddr),
+		remoteIp: remoteIpFromRequest(r),
 	}
 	s.onClientConnected(newClient)
 }
@@ -52,23 +51,4 @@ func newWebsocketServer(path string) *websocketServer {
 	})
 
 	return s
-}
-
-func getRemoteIp(address string) string {
-	var ip string
-
-	if address[0] == '[' {
-		// IPv6: [<ip>]:<port>
-		ip = address[1:strings.IndexRune(address, ']')]
-	} else {
-		// IPv4: <ip>:<port>
-		ip = strings.Split(address, ":")[0]
-	}
-
-	// Make sure the IP address is always the same when coming from localhost.
-	if ip == "127.0.0.1" || ip == "::ffff:127.0.0.1" {
-		ip = "::1"
-	}
-
-	return ip
 }

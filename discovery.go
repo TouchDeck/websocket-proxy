@@ -7,7 +7,7 @@ import (
 )
 
 func discovery(w http.ResponseWriter, r *http.Request) {
-	reqIp := getRemoteIp(r.RemoteAddr)
+	reqIp := remoteIpFromRequest(r)
 	agents := prx.agentsByPublicIp[reqIp]
 	if agents == nil {
 		agents = []*agent{}
