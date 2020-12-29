@@ -131,8 +131,6 @@ func (p *proxy) onRemoteConnected(newClient *websocketClient) {
 }
 
 func (p *proxy) removeAgent(a *agent) {
-	a.client.close()
-
 	// Close all remotes.
 	for r := range a.remotes {
 		r.client.close()
@@ -152,5 +150,10 @@ func (p *proxy) removeAgent(a *agent) {
 	}
 	if localI >= 0 {
 		p.agentsByRemoteIp[a.client.remoteIp] = append(localAgents[:localI], localAgents[localI+1:]...)
+	}
+
+	// If the last agent from a remote IP disconnected, clear the entry.
+	if len(p.agentsByRemoteIp[a.client.remoteIp]) == 0 {
+		delete(p.agentsByRemoteIp, a.client.remoteIp)
 	}
 }
