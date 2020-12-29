@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
-	"io"
 	"log"
 )
 
+// TODO: Use channels to register/remove agents to prevent race conditions
+// See: https://github.com/gorilla/websocket/blob/master/examples/chat/hub.go
 type proxy struct {
 	agentServer      *websocketServer
 	remoteServer     *websocketServer
@@ -16,8 +17,13 @@ type proxy struct {
 }
 
 type agent struct {
-	Id     string                 `json:"id"`
-	Meta   map[string]interface{} `json:"meta"`
+	Id      string                 `json:"id"`
+	Meta    map[string]interface{} `json:"meta"`
+	client  *websocketClient
+	remotes map[*remote]bool
+}
+
+type remote struct {
 	client *websocketClient
 }
 
@@ -40,21 +46,17 @@ func newProxy(basePath string) *proxy {
 }
 
 func (p *proxy) onAgentConnected(newClient *websocketClient) {
+	// TODO: read message from newClient.recv instead of reading from newClient.conn
+
 	// Listen for one message with the agent information.
-	_, msg, err := newClient.conn.ReadMessage()
+	newAgent := &agent{
+		Meta:    map[string]interface{}{},
+		client:  newClient,
+		remotes: map[*remote]bool{},
+	}
+	err := newClient.conn.ReadJSON(newAgent)
 	if err != nil {
 		log.Println("Could not read agent message:", err)
-		newClient.close()
-		return
-	}
-
-	newAgent := &agent{
-		client: newClient,
-		Meta:   map[string]interface{}{},
-	}
-	err = json.Unmarshal(msg, newAgent)
-	if err != nil {
-		log.Println("Could not unmarshal agent message:", err)
 		newClient.close()
 		return
 	}
@@ -63,34 +65,43 @@ func (p *proxy) onAgentConnected(newClient *websocketClient) {
 	log.Println("Agent client connected:", newAgent.Id)
 
 	// Store the agent by id and remote IP.
-	// TODO: remove agent from lists on disconnect.
 	p.agents[newAgent.Id] = newAgent
 	p.agentsByRemoteIp[newClient.remoteIp] = append(p.agentsByRemoteIp[newClient.remoteIp], newAgent)
 
+	// Send the agent info to the agent.
 	reply, err := json.Marshal(newAgent)
 	if err != nil {
 		log.Println("Could not marshal agent response:", err)
 		newClient.close()
 		return
 	}
-
-	newClient.conn.WriteMessage(websocket.TextMessage, reply)
-}
-
-func (p *proxy) onRemoteConnected(remote *websocketClient) {
-	// Listen for one message with the id of the agent to connect to.
-	_, msg, err := remote.conn.ReadMessage()
-	if err != nil {
-		log.Println("Could not read remote message:", err)
-		remote.close()
-		return
+	newAgent.client.send <- message{
+		messageType: websocket.TextMessage,
+		data:        reply,
 	}
 
+	// Pipe received messages to all remotes.
+	go func() {
+		for msg := range newAgent.client.recv {
+			for r := range newAgent.remotes {
+				r.client.send <- msg
+			}
+		}
+
+		log.Println("Closed agent:", newAgent.Id)
+		p.removeAgent(newAgent)
+	}()
+}
+
+func (p *proxy) onRemoteConnected(newClient *websocketClient) {
+	// TODO: read message from newClient.recv instead of reading from newClient.conn
+
+	// Listen for one message with the id of the agent to connect to.
 	target := &agentId{}
-	err = json.Unmarshal(msg, target)
+	err := newClient.conn.ReadJSON(target)
 	if err != nil {
-		log.Println("Could not unmarshal remote message:", err)
-		remote.close()
+		log.Println("Could not read remote message:", err)
+		newClient.close()
 		return
 	}
 
@@ -98,30 +109,35 @@ func (p *proxy) onRemoteConnected(remote *websocketClient) {
 	targetAgent := p.agents[target.Id]
 	if targetAgent == nil {
 		log.Println("Could not find target agent:", target.Id)
-		remote.close()
+		newClient.close()
 		return
 	}
 
-	log.Println("Remote client connected:", target.Id)
+	log.Println("Remote client connected to:", target.Id)
+	newRemote := &remote{
+		client: newClient,
+	}
+	targetAgent.remotes[newRemote] = true
 
-	// Pipe all data both ways.
+	// Pipe received messages to the agent.
+	go func() {
+		for msg := range newRemote.client.recv {
+			targetAgent.client.send <- msg
+		}
 
-	go func() {
-		_, err := io.Copy(remote.conn.UnderlyingConn(), targetAgent.client.conn.UnderlyingConn())
-		if err != nil {
-			log.Println("Error piping remote -> agent:", err)
-		}
-	}()
-	go func() {
-		_, err := io.Copy(targetAgent.client.conn.UnderlyingConn(), remote.conn.UnderlyingConn())
-		if err != nil {
-			log.Println("Error piping agent -> remote:", err)
-		}
+		log.Println("Closed remote:", target.Id)
+		delete(targetAgent.remotes, newRemote)
 	}()
 }
 
 func (p *proxy) removeAgent(a *agent) {
-	log.Println("Removing agent:", a.Id)
+	a.client.close()
+
+	// Close all remotes.
+	for r := range a.remotes {
+		r.client.close()
+		delete(a.remotes, r)
+	}
 
 	// Delete the agent from the global agents list.
 	delete(p.agents, a.Id)

@@ -6,11 +6,6 @@ import (
 	"net/http"
 )
 
-type websocketClient struct {
-	conn     *websocket.Conn
-	remoteIp string
-}
-
 type websocketServer struct {
 	address           string
 	onClientConnected func(c *websocketClient)
@@ -23,10 +18,6 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func (c *websocketClient) close() {
-	c.conn.Close()
-}
-
 func (s *websocketServer) handleClient(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -37,8 +28,16 @@ func (s *websocketServer) handleClient(w http.ResponseWriter, r *http.Request) {
 	newClient := &websocketClient{
 		conn:     conn,
 		remoteIp: remoteIpFromRequest(r),
+		send:     make(chan message),
+		recv:     make(chan message),
 	}
+
+	// The write pump needs to start first, so onClientConnected can send messages.
+	// The read pump needs to start last, to prevent race conditions with
+	// onClientConnected while reading initialization messages.
+	go newClient.writePump()
 	s.onClientConnected(newClient)
+	go newClient.readPump()
 }
 
 func newWebsocketServer(path string) *websocketServer {
