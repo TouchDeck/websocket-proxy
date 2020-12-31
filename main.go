@@ -3,13 +3,14 @@ package main
 import (
 	"log"
 	"net/http"
+	"websocket-proxy/pkg/proxy"
 )
 
-var prx *proxy
+var prx *proxy.Proxy
 
 func main() {
 	log.Println("Starting proxy...")
-	prx = newProxy("/ws")
+	prx = proxy.NewProxy("/ws")
 
 	http.HandleFunc("/agents", discovery)
 

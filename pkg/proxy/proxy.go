@@ -1,63 +1,68 @@
-package main
+package proxy
 
 import (
 	"encoding/json"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
 	"log"
+	"websocket-proxy/pkg/ws"
 )
 
 // TODO: Use channels to register/remove agents to prevent race conditions
 // See: https://github.com/gorilla/websocket/blob/master/examples/chat/hub.go
-type proxy struct {
-	agentServer      *websocketServer
-	remoteServer     *websocketServer
-	agents           map[string]*agent
-	agentsByRemoteIp map[string][]*agent
+type Proxy struct {
+	agentServer      *ws.Server
+	remoteServer     *ws.Server
+	agents           map[string]*Agent
+	AgentsByRemoteIp map[string][]*Agent
 }
 
-type agent struct {
+type Agent struct {
 	Id      string                 `json:"id"`
 	Meta    map[string]interface{} `json:"meta"`
-	client  *websocketClient
+	client  *ws.Client
 	remotes map[*remote]bool
 }
 
 type remote struct {
-	client *websocketClient
+	client *ws.Client
 }
 
 type agentId struct {
 	Id string `json:"id"`
 }
 
-func newProxy(basePath string) *proxy {
-	p := &proxy{
-		agentServer:      newWebsocketServer(basePath + "/agent"),
-		remoteServer:     newWebsocketServer(basePath + "/remote"),
-		agents:           map[string]*agent{},
-		agentsByRemoteIp: map[string][]*agent{},
+func NewProxy(basePath string) *Proxy {
+	p := &Proxy{
+		agentServer:      ws.NewServer(basePath + "/agent"),
+		remoteServer:     ws.NewServer(basePath + "/remote"),
+		agents:           map[string]*Agent{},
+		AgentsByRemoteIp: map[string][]*Agent{},
 	}
 
-	p.agentServer.onClientConnected = p.onAgentConnected
-	p.remoteServer.onClientConnected = p.onRemoteConnected
+	p.agentServer.SetOnClientConnected(p.onAgentConnected)
+	p.remoteServer.SetOnClientConnected(p.onRemoteConnected)
 
 	return p
 }
 
-func (p *proxy) onAgentConnected(newClient *websocketClient) {
-	// TODO: read message from newClient.recv instead of reading from newClient.conn
-
+func (p *Proxy) onAgentConnected(newClient *ws.Client) {
 	// Listen for one message with the agent information.
-	newAgent := &agent{
+	msg, ok := <-newClient.Recv
+	if !ok {
+		log.Println("Could not read agent message")
+		return
+	}
+
+	// Unmarshal the agent information.
+	newAgent := &Agent{
 		Meta:    map[string]interface{}{},
 		client:  newClient,
 		remotes: map[*remote]bool{},
 	}
-	err := newClient.conn.ReadJSON(newAgent)
-	if err != nil {
-		log.Println("Could not read agent message:", err)
-		newClient.close()
+	if err := json.Unmarshal(msg.Data, newAgent); err != nil {
+		log.Println("Could not unmarshal agent message:", err)
+		newClient.Close()
 		return
 	}
 
@@ -66,25 +71,25 @@ func (p *proxy) onAgentConnected(newClient *websocketClient) {
 
 	// Store the agent by id and remote IP.
 	p.agents[newAgent.Id] = newAgent
-	p.agentsByRemoteIp[newClient.remoteIp] = append(p.agentsByRemoteIp[newClient.remoteIp], newAgent)
+	p.AgentsByRemoteIp[newClient.RemoteIp] = append(p.AgentsByRemoteIp[newClient.RemoteIp], newAgent)
 
 	// Send the agent info to the agent.
 	reply, err := json.Marshal(newAgent)
 	if err != nil {
 		log.Println("Could not marshal agent response:", err)
-		newClient.close()
+		newClient.Close()
 		return
 	}
-	newAgent.client.send <- message{
-		messageType: websocket.TextMessage,
-		data:        reply,
+	newAgent.client.Send <- ws.Message{
+		MessageType: websocket.TextMessage,
+		Data:        reply,
 	}
 
 	// Pipe received messages to all remotes.
 	go func() {
-		for msg := range newAgent.client.recv {
+		for msg := range newAgent.client.Recv {
 			for r := range newAgent.remotes {
-				r.client.send <- msg
+				r.client.Send <- msg
 			}
 		}
 
@@ -93,15 +98,19 @@ func (p *proxy) onAgentConnected(newClient *websocketClient) {
 	}()
 }
 
-func (p *proxy) onRemoteConnected(newClient *websocketClient) {
-	// TODO: read message from newClient.recv instead of reading from newClient.conn
-
+func (p *Proxy) onRemoteConnected(newClient *ws.Client) {
 	// Listen for one message with the id of the agent to connect to.
+	msg, ok := <-newClient.Recv
+	if !ok {
+		log.Println("Could not read remote message")
+		return
+	}
+
+	// Unmarshal the remote information.
 	target := &agentId{}
-	err := newClient.conn.ReadJSON(target)
-	if err != nil {
-		log.Println("Could not read remote message:", err)
-		newClient.close()
+	if err := json.Unmarshal(msg.Data, target); err != nil {
+		log.Println("Could not unmarshal remote message:", err)
+		newClient.Close()
 		return
 	}
 
@@ -109,7 +118,7 @@ func (p *proxy) onRemoteConnected(newClient *websocketClient) {
 	targetAgent := p.agents[target.Id]
 	if targetAgent == nil {
 		log.Println("Could not find target agent:", target.Id)
-		newClient.close()
+		newClient.Close()
 		return
 	}
 
@@ -121,8 +130,8 @@ func (p *proxy) onRemoteConnected(newClient *websocketClient) {
 
 	// Pipe received messages to the agent.
 	go func() {
-		for msg := range newRemote.client.recv {
-			targetAgent.client.send <- msg
+		for msg := range newRemote.client.Recv {
+			targetAgent.client.Send <- msg
 		}
 
 		log.Println("Closed remote:", target.Id)
@@ -130,10 +139,10 @@ func (p *proxy) onRemoteConnected(newClient *websocketClient) {
 	}()
 }
 
-func (p *proxy) removeAgent(a *agent) {
+func (p *Proxy) removeAgent(a *Agent) {
 	// Close all remotes.
 	for r := range a.remotes {
-		r.client.close()
+		r.client.Close()
 		delete(a.remotes, r)
 	}
 
@@ -141,7 +150,7 @@ func (p *proxy) removeAgent(a *agent) {
 	delete(p.agents, a.Id)
 
 	// Find and remove the agent from the local agents list.
-	localAgents := p.agentsByRemoteIp[a.client.remoteIp]
+	localAgents := p.AgentsByRemoteIp[a.client.RemoteIp]
 	localI := -1
 	for i, l := range localAgents {
 		if l.Id == a.Id {
@@ -149,11 +158,11 @@ func (p *proxy) removeAgent(a *agent) {
 		}
 	}
 	if localI >= 0 {
-		p.agentsByRemoteIp[a.client.remoteIp] = append(localAgents[:localI], localAgents[localI+1:]...)
+		p.AgentsByRemoteIp[a.client.RemoteIp] = append(localAgents[:localI], localAgents[localI+1:]...)
 	}
 
 	// If the last agent from a remote IP disconnected, clear the entry.
-	if len(p.agentsByRemoteIp[a.client.remoteIp]) == 0 {
-		delete(p.agentsByRemoteIp, a.client.remoteIp)
+	if len(p.AgentsByRemoteIp[a.client.RemoteIp]) == 0 {
+		delete(p.AgentsByRemoteIp, a.client.RemoteIp)
 	}
 }

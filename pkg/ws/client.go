@@ -1,4 +1,4 @@
-package main
+package ws
 
 import (
 	"github.com/gorilla/websocket"
@@ -12,29 +12,29 @@ const (
 	writeWait  = 10 * time.Second
 )
 
-type websocketClient struct {
+type Client struct {
 	conn     *websocket.Conn
-	remoteIp string
-	send     chan message
-	recv     chan message
+	RemoteIp string
+	Send     chan Message
+	Recv     chan Message
 	closed   bool
 }
 
-type message struct {
-	messageType int
-	data        []byte
+type Message struct {
+	MessageType int
+	Data        []byte
 }
 
-func (c *websocketClient) close() {
+func (c *Client) Close() {
 	if !c.closed {
 		c.closed = true
 		c.conn.Close()
-		close(c.recv)
+		close(c.Recv)
 	}
 }
 
-func (c *websocketClient) readPump() {
-	defer c.close()
+func (c *Client) readPump() {
+	defer c.Close()
 
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
@@ -52,31 +52,31 @@ func (c *websocketClient) readPump() {
 			break
 		}
 
-		c.recv <- message{
-			messageType: t,
-			data:        msg,
+		c.Recv <- Message{
+			MessageType: t,
+			Data:        msg,
 		}
 	}
 }
 
-func (c *websocketClient) writePump() {
+func (c *Client) writePump() {
 	pingTicker := time.NewTicker(pingPeriod)
 
 	defer func() {
 		pingTicker.Stop()
-		c.close()
+		c.Close()
 	}()
 
 	for {
 		select {
-		case msg, ok := <-c.send:
+		case msg, ok := <-c.Send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				log.Println("Client send channel closed")
 				return
 			}
 
-			err := c.conn.WriteMessage(msg.messageType, msg.data)
+			err := c.conn.WriteMessage(msg.MessageType, msg.Data)
 			if err != nil {
 				return
 			}

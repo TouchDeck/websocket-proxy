@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"websocket-proxy/pkg/proxy"
+	"websocket-proxy/pkg/remoteIp"
 )
 
 func discovery(w http.ResponseWriter, r *http.Request) {
-	reqIp := remoteIpFromRequest(r)
-	agents := prx.agentsByRemoteIp[reqIp]
+	reqIp := remoteIp.FromRequest(r)
+	agents := prx.AgentsByRemoteIp[reqIp]
 	if agents == nil {
-		agents = []*agent{}
+		agents = []*proxy.Agent{}
 	}
 
 	j, err := json.Marshal(agents)

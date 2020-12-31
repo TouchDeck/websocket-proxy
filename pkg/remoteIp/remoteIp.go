@@ -1,11 +1,11 @@
-package main
+package remoteIp
 
 import (
 	"net/http"
 	"strings"
 )
 
-func remoteIpFromRequest(r *http.Request) string {
+func FromRequest(r *http.Request) string {
 	// X-Real-IP contains a single IP address.
 	if realIp := r.Header.Get("X-Real-IP"); realIp != "" {
 		return realIp
