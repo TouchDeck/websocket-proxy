@@ -1,0 +1,38 @@
+<html>
+<head>
+    <script>
+        const baseUrl = 'ws://localhost:8783/ws';
+
+        let agentInit = false;
+        agentWs = new WebSocket(`${baseUrl}/agent`);
+        agentWs.addEventListener('error', console.error);
+        agentWs.addEventListener('close', () => console.log('agent close'));
+        agentWs.addEventListener('message', (m) => {
+            if (!agentInit) {
+                agentInit = true;
+                const agentInfo = JSON.parse(m.data);
+                console.log('Agent connected:', agentInfo);
+                console.log('Connect remote using:');
+                console.log(`remoteWs.send('{ "id": "${agentInfo.id}" }');`);
+                return;
+            }
+
+            console.log('agent:', m.data);
+        });
+        agentWs.addEventListener('open', () => {
+            agentWs.send(JSON.stringify({
+                meta: {
+                    platform: 'linux',
+                    version: '1.2.3'
+                }
+            }));
+        });
+
+        remoteWs = new WebSocket(`${baseUrl}/remote`);
+        remoteWs.addEventListener('error', console.error);
+        remoteWs.addEventListener('close', () => console.log('remote close'));
+        remoteWs.addEventListener('message', (m) => console.log('remote:', m.data));
+    </script>
+</head>
+<body></body>
+</html>
