@@ -1,6 +1,6 @@
 FROM golang:latest AS build
 WORKDIR /go/src/websocket-proxy
-COPY *.go ./
+COPY . .
 
 ENV CGO_ENABLED=0
 RUN go get -d
