@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/TouchDeck/websocket-proxy/pkg/proxy"
+	"github.com/rs/cors"
 	"log"
 	"net/http"
 )
@@ -17,7 +18,8 @@ func main() {
 
 	// Start the HTTP server.
 	log.Println("Starting HTTP server on port 8783")
-	err := http.ListenAndServe(":8783", mux)
+	handler := cors.AllowAll().Handler(mux)
+	err := http.ListenAndServe(":8783", handler)
 	if err != nil {
 		log.Fatalln("Error starting websocket server:", err)
 	}
