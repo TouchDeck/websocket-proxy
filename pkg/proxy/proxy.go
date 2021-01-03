@@ -66,7 +66,7 @@ func (p *Proxy) onAgentConnected(newClient *ws.Client) {
 		return
 	}
 
-	newAgent.Id = uuid.Must(uuid.NewV4()).String()
+	newAgent.Id = uuid.NewV4().String()
 	log.Println("Agent client connected:", newAgent.Id)
 
 	// Store the agent by id and remote IP.
