@@ -44,12 +44,12 @@ func (s *Server) SetOnClientConnected(f func(newClient *Client)) {
 	s.onClientConnected = f
 }
 
-func NewServer(path string) *Server {
+func NewServer(mux *http.ServeMux, path string) *Server {
 	s := &Server{
 		onClientConnected: func(c *Client) {},
 	}
 
-	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		s.handleClient(w, r)
 	})
 

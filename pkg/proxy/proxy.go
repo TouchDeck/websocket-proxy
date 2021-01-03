@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
 	"log"
+	"net/http"
 )
 
 // TODO: Use channels to register/remove agents to prevent race conditions
@@ -32,10 +33,10 @@ type agentId struct {
 	Id string `json:"id"`
 }
 
-func NewProxy(basePath string) *Proxy {
+func NewProxy(mux *http.ServeMux, basePath string) *Proxy {
 	p := &Proxy{
-		agentServer:      ws.NewServer(basePath + "/agent"),
-		remoteServer:     ws.NewServer(basePath + "/remote"),
+		agentServer:      ws.NewServer(mux, basePath+"/agent"),
+		remoteServer:     ws.NewServer(mux, basePath+"/remote"),
 		agents:           map[string]*Agent{},
 		AgentsByRemoteIp: map[string][]*Agent{},
 	}
