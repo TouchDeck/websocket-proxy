@@ -1,10 +1,10 @@
 package ws
 
 import (
+	"github.com/TouchDeck/websocket-proxy/pkg/remoteIp"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-	"websocket-proxy/pkg/remoteIp"
 )
 
 type Server struct {

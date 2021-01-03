@@ -2,10 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/TouchDeck/websocket-proxy/pkg/proxy"
+	"github.com/TouchDeck/websocket-proxy/pkg/remoteIp"
 	"log"
 	"net/http"
-	"websocket-proxy/pkg/proxy"
-	"websocket-proxy/pkg/remoteIp"
 )
 
 func discovery(w http.ResponseWriter, r *http.Request) {

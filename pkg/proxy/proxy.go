@@ -2,10 +2,10 @@ package proxy
 
 import (
 	"encoding/json"
+	"github.com/TouchDeck/websocket-proxy/pkg/ws"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
 	"log"
-	"websocket-proxy/pkg/ws"
 )
 
 // TODO: Use channels to register/remove agents to prevent race conditions

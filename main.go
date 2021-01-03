@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/TouchDeck/websocket-proxy/pkg/proxy"
 	"log"
 	"net/http"
-	"websocket-proxy/pkg/proxy"
 )
 
 var prx *proxy.Proxy
