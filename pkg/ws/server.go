@@ -13,8 +13,8 @@ type Server struct {
 }
 
 var upgrader = websocket.Upgrader{
+	// Allow all origins.
 	CheckOrigin: func(_ *http.Request) bool {
-		// TODO: Actually check origin
 		return true
 	},
 }
