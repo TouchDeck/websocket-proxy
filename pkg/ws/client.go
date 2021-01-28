@@ -52,6 +52,10 @@ func (c *Client) readPump() {
 			break
 		}
 
+		if c.closed {
+			break
+		}
+
 		c.Recv <- Message{
 			MessageType: t,
 			Data:        msg,
