@@ -7,6 +7,7 @@ import (
 	"github.com/satori/go.uuid"
 	"log"
 	"net/http"
+	"sync"
 )
 
 // TODO: Use channels to register/remove agents to prevent race conditions
@@ -19,10 +20,11 @@ type Proxy struct {
 }
 
 type Agent struct {
-	Id      string                 `json:"id"`
-	Meta    map[string]interface{} `json:"meta"`
-	client  *ws.Client
-	remotes map[*remote]bool
+	Id          string                 `json:"id"`
+	Meta        map[string]interface{} `json:"meta"`
+	client      *ws.Client
+	remotes     map[*remote]bool
+	remotesLock *sync.RWMutex
 }
 
 type remote struct {
@@ -57,9 +59,10 @@ func (p *Proxy) onAgentConnected(newClient *ws.Client) {
 
 	// Unmarshal the agent information.
 	newAgent := &Agent{
-		Meta:    map[string]interface{}{},
-		client:  newClient,
-		remotes: map[*remote]bool{},
+		Meta:        map[string]interface{}{},
+		client:      newClient,
+		remotes:     map[*remote]bool{},
+		remotesLock: &sync.RWMutex{},
 	}
 	if err := json.Unmarshal(msg.Data, newAgent); err != nil {
 		log.Println("Could not unmarshal agent message:", err)
@@ -89,11 +92,11 @@ func (p *Proxy) onAgentConnected(newClient *ws.Client) {
 	// Pipe received messages to all remotes.
 	go func() {
 		for msg := range newAgent.client.Recv {
+			newAgent.remotesLock.RLock()
 			for r := range newAgent.remotes {
-				if !r.client.Closed() {
-					r.client.Send <- msg
-				}
+				r.client.Send <- msg
 			}
+			newAgent.remotesLock.RUnlock()
 		}
 
 		log.Println("Closed agent:", newAgent.Id)
@@ -129,27 +132,31 @@ func (p *Proxy) onRemoteConnected(newClient *ws.Client) {
 	newRemote := &remote{
 		client: newClient,
 	}
+	targetAgent.remotesLock.Lock()
 	targetAgent.remotes[newRemote] = true
+	targetAgent.remotesLock.Unlock()
 
 	// Pipe received messages to the agent.
 	go func() {
 		for msg := range newRemote.client.Recv {
-			if !targetAgent.client.Closed() {
-				targetAgent.client.Send <- msg
-			}
+			targetAgent.client.Send <- msg
 		}
 
 		log.Println("Closed remote:", target.Id)
+		targetAgent.remotesLock.Lock()
 		delete(targetAgent.remotes, newRemote)
+		targetAgent.remotesLock.Unlock()
 	}()
 }
 
 func (p *Proxy) removeAgent(a *Agent) {
 	// Close all remotes.
+	a.remotesLock.Lock()
 	for r := range a.remotes {
 		r.client.Close()
 		delete(a.remotes, r)
 	}
+	a.remotesLock.Unlock()
 
 	// Delete the agent from the global agents list.
 	delete(p.agents, a.Id)

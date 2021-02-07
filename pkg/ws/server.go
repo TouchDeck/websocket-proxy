@@ -49,9 +49,7 @@ func NewServer(mux *http.ServeMux, path string) *Server {
 		onClientConnected: func(c *Client) {},
 	}
 
-	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		s.handleClient(w, r)
-	})
+	mux.HandleFunc(path, s.handleClient)
 
 	return s
 }
