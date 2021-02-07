@@ -139,9 +139,7 @@ func (p *Proxy) onRemoteConnected(newClient *ws.Client) {
 	// Pipe received messages to the agent.
 	go func() {
 		for msg := range newRemote.client.Recv {
-			if !targetAgent.client.Closed() {
-				targetAgent.client.Send <- msg
-			}
+			targetAgent.client.Send <- msg
 		}
 
 		log.Println("Closed remote:", target.Id)

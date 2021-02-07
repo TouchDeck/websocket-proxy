@@ -32,10 +32,6 @@ func (c *Client) Close() {
 	}
 }
 
-func (c *Client) Closed() bool {
-	return c.closed
-}
-
 func (c *Client) readPump() {
 	defer close(c.Recv)
 
