@@ -29,7 +29,6 @@ func (c *Client) Close() {
 	if !c.closed {
 		c.closed = true
 		c.conn.Close()
-		close(c.Recv)
 	}
 }
 
@@ -38,7 +37,7 @@ func (c *Client) Closed() bool {
 }
 
 func (c *Client) readPump() {
-	defer c.Close()
+	defer close(c.Recv)
 
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
@@ -53,10 +52,6 @@ func (c *Client) readPump() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Println("Unexpected error while reading agent message:", err)
 			}
-			break
-		}
-
-		if c.closed {
 			break
 		}
 
